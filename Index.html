@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vintage Photo Booth</title>
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Special Elite', cursive;
+      background: #1b1b1b url('https://www.transparenttextures.com/patterns/black-linen.png');
+      margin: 0;
+      color: #eee;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h2 {
+      font-size: 2.5rem;
+      text-shadow: 2px 2px 5px #000;
+    }
+
+    video {
+      width: 100%;
+      max-width: 480px;
+      border-radius: 10px;
+      border: 5px solid #222;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    }
+
+    #countdown {
+      font-size: 48px;
+      font-weight: bold;
+      color: #ffeb3b;
+      height: 60px;
+      margin: 10px;
+      text-shadow: 2px 2px 8px #000;
+    }
+
+    .filters, .controls {
+      margin: 15px 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .filters button, button, select {
+      font-family: 'Special Elite', cursive;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 6px;
+      background-color: #333;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+
+    .filters button:hover, button:hover, select:hover {
+      background-color: #555;
+    }
+
+    #strip {
+      margin-top: 20px;
+      background: #000;
+      padding: 15px;
+      border-radius: 12px;
+      border: 4px dashed #555;
+      box-shadow: inset 0 0 10px #111, 0 0 15px #000;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .photo {
+      width: 150px;
+      border: 6px solid #000;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.7);
+      background: #000;
+      border-radius: 12px;
+    }
+
+    canvas {
+      display: none;
+    }
+
+    @media (max-width: 500px) {
+      video { height: auto; width: 100vw; }
+      .photo { width: 120px; }
+    }
+  </style>
+</head>
+<body>
+  <h2>📸 Vintage Photo Booth</h2>
+  <video id="video" autoplay playsinline></video>
+  <div id="countdown"></div>
+
+  <div class="filters">
+    <button onclick="setFilter('none')">No Filter</button>
+    <button onclick="setFilter('contrast(120%) brightness(90%) sepia(0.4) saturate(120%)')">Vinyl</button>
+    <button onclick="setFilter('sepia(80%) brightness(110%)')">Amber</button>
+    <button onclick="setFilter('grayscale(90%) contrast(80%)')">Chalk</button>
+    <button onclick="setFilter('contrast(130%) saturate(200%) hue-rotate(180deg)')">Jewel</button>
+    <button onclick="setFilter('blur(1px) brightness(110%)')">Frost</button>
+    <button onclick="setFilter('contrast(120%) brightness(85%) saturate(130%)')">Velvet</button>
+    <button onclick="setFilter('sepia(30%) brightness(105%) contrast(90%)')">Sand</button>
+    <button onclick="setFilter('brightness(115%) contrast(95%) saturate(80%)')">Pearl</button>
+  </div>
+
+  <div class="controls">
+    <button onclick="takePhoto()">📸 Take Photo</button>
+    <button onclick="deleteLastPhoto()">🗑️ Remove Last</button>
+    <select id="layoutOption">
+      <option value="vertical">🎞️ Vertical Strip</option>
+      <option value="horizontal">🖼️ Horizontal Strip</option>
+      <option value="grid">🔲 2x2 Grid</option>
+    </select>
+    <button onclick="downloadStrip()">⬇️ Download Strip</button>
+  </div>
+
+  <div id="strip"></div>
+
+  <canvas id="canvas" width="320" height="240"></canvas>
+  <audio id="snap" src="https://www.soundjay.com/mechanical/camera-shutter-click-01a.mp3" preload="auto"></audio>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const strip = document.getElementById('strip');
+    const countdownEl = document.getElementById('countdown');
+    const snapSound = document.getElementById('snap');
+    const layoutSelect = document.getElementById('layoutOption');
+
+    let filter = 'none';
+    let images = [];
+    let cameraReady = false;
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+        video.onloadedmetadata = () => video.play();
+      })
+      .catch(() => alert("Camera access denied or not available."));
+
+    video.addEventListener('canplay', () => {
+      cameraReady = true;
+    });
+
+    function setFilter(type) {
+      filter = type;
+      video.style.filter = filter;
+    }
+
+    function takePhoto() {
+      if (images.length >= 4) {
+        alert('Maximum 4 photos allowed!');
+        return;
+      }
+
+      if (!cameraReady) {
+        alert('Camera is not ready yet. Please wait.');
+        return;
+      }
+
+      let count = 3;
+      countdownEl.textContent = count;
+
+      const interval = setInterval(() => {
+        count--;
+        if (count > 0) {
+          countdownEl.textContent = count;
+        } else {
+          clearInterval(interval);
+          countdownEl.textContent = '';
+
+          // 🔊 Play shutter sound
+          snapSound.currentTime = 0;
+          snapSound.play().catch(e => console.warn('Audio play blocked:', e));
+
+          // 🎞️ Capture photo
+          ctx.filter = filter;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          const img = new Image();
+          img.src = canvas.toDataURL('image/png');
+          img.className = 'photo';
+          images.push(img);
+          strip.appendChild(img);
+        }
+      }, 1000);
+    }
+
+    function deleteLastPhoto() {
+      if (images.length > 0) {
+        strip.removeChild(images.pop());
+      }
+    }
+
+    function downloadStrip() {
+      if (images.length === 0) return alert('Take some photos first!');
+
+      const layout = layoutSelect.value;
+      const photoW = 320, photoH = 240;
+      const gap = 20, padding = 40, footerHeight = 40, sideMargin = 30;
+
+      let rows = 1, cols = images.length;
+      if (layout === 'grid') { rows = 2; cols = 2; }
+      else if (layout === 'vertical') { rows = images.length; cols = 1; }
+
+      const width = cols * photoW + (cols - 1) * gap + sideMargin * 2;
+      const height = rows * photoH + (rows - 1) * gap + padding * 2 + footerHeight;
+
+      const stripCanvas = document.createElement('canvas');
+      stripCanvas.width = width;
+      stripCanvas.height = height;
+      const ctx = stripCanvas.getContext('2d');
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, height);
+
+      // 🎞️ Left & right sprockets
+      for (let y = padding; y < height - footerHeight - 10; y += 20) {
+        ctx.fillStyle = '#ccc';
+        ctx.fillRect(10, y, 6, 12);
+        ctx.fillRect(width - 16, y, 6, 12);
+      }
+
+      // 🔳 Top & bottom sprockets
+      const holeSize = 10, holeGap = 8;
+      const topBottomHoleCount = Math.floor((width - sideMargin * 2) / (holeSize + holeGap));
+      for (let i = 0; i < topBottomHoleCount; i++) {
+        const x = sideMargin + i * (holeSize + holeGap);
+        ctx.fillStyle = '#ccc';
+        ctx.fillRect(x, 5, holeSize, 6);
+        ctx.fillRect(x, height - footerHeight + 5, holeSize, 6);
+      }
+
+      // 🖼️ Draw rounded photos with spacing
+      for (let i = 0; i < images.length; i++) {
+        const col = layout === 'grid' ? i % cols : (layout === 'horizontal' ? i : 0);
+        const row = layout === 'grid' ? Math.floor(i / cols) : (layout === 'vertical' ? i : 0);
+        const x = sideMargin + col * (photoW + gap);
+        const y = padding + row * (photoH + gap);
+
+        const radius = 20;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + photoW - radius, y);
+        ctx.quadraticCurveTo(x + photoW, y, x + photoW, y + radius);
+        ctx.lineTo(x + photoW, y + photoH - radius);
+        ctx.quadraticCurveTo(x + photoW, y + photoH, x + photoW - radius, y + photoH);
+        ctx.lineTo(x + radius, y + photoH);
+        ctx.quadraticCurveTo(x, y + photoH, x, y + photoH - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.clip();
+
+        ctx.drawImage(images[i], x, y, photoW, photoH);
+        ctx.restore();
+      }
+
+      // 🕒 Timestamp
+      ctx.font = "18px 'Special Elite'";
+      ctx.fillStyle = "#aaa";
+      ctx.textAlign = "center";
+      ctx.fillText(new Date().toLocaleString(), width / 2, height - 10);
+
+      const link = document.createElement('a');
+      link.download = 'vintage-film-strip.png';
+      link.href = stripCanvas.toDataURL();
+      link.click();
+    }
+  </script>
+</body>
+</html>
